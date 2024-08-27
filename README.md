@@ -21,7 +21,7 @@ An easy way to write shell scripts in Python. Abuses operator overloading to pro
 | `uptime >> uptimes.txt`                 | `sh.uptime() >> 'uptimes.txt'`                              | `>>` implements append to a filename                       |
 | `sort < index.txt`                      | `sh.uptime() < 'index.txt'`                                 | '>' implements redirection from a filename                 |
 | --                                      | `sh.uptime() > open('uptime.txt')`                          | The operand may also be a native Python file object        |
-| `git shortlog | sort -r | gzip log.txt` | `sh.git.shortlog()` \| `sh.sort(r=True)`  \| `sh.gzip('log.txt')` | `|` implements a pipeline between processes                |
+| `git shortlog | sort -r | gzip log.txt` | `sh.git.shortlog()` \| `sh.sort(r=True)`  \| `sh.gzip('log.txt')` | \| implements a pipeline between processes                |
 
 
 ### Lazy loading
