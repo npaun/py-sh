@@ -5,3 +5,5 @@ print(list(sh.git.ls_files()))
 print(sh.git.log(S="import"))
 print(sh.sort() < "/etc/passwd")
 (sh.uptime() >> "uptime.txt").run()
+print((sh.git.shortlog() | sh.sort() | sh.md5()).run())
+
