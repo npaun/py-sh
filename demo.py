@@ -1,9 +1,11 @@
 from sh import sh
-
 print(repr(sh.date()))
 print(list(sh.git.ls_files()))
 print(sh.git.log(S="import"))
 print(sh.sort() < "/etc/passwd")
 (sh.uptime() >> "uptime.txt").run()
 print((sh.git.shortlog() | sh.sort() | sh.md5()).run())
-
+print(int(sh.date('+%s', u=True)))
+print('2024' in sh.date())
+print(sh.id(u=True, n=True) == 'np')
+print((sh.cc().fd(2) > 'funerror.txt').or_true())

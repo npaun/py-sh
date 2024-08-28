@@ -1,54 +1,64 @@
 import subprocess
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import Optional
+from typing import Optional, Any
 from pathlib import Path
 import os
+
+@dataclass
+class FDSetter:
+    thiz: Any
+    fd: Optional[int] = None
+
+    def _assign_fd(self, obj, default_fd, mode):
+        fd = self.fd if self.fd is not None else default_fd
+        if hasattr(obj, 'read'):
+            self.thiz.fds[fd] = obj
+        else:
+            self.thiz.fds[fd] = open(obj, mode)
+
+    def __gt__(self, sink):
+        self._assign_fd(sink, 1, 'w')
+        return self.thiz
+
+    def __rshift__(self, sink):
+        self._assign_fd(sink, 1, 'a')
+        return self.thiz
+
+    def __lt__(self, source):
+        self._assign_fd(source, 0, 'r')
+        return self.thiz
+
 
 
 @dataclass
 class ResultAdaptor:
     argv: list[str]
-    input_file: Optional[str] = None
-    output_file: Optional[str] = None
     result: Optional[str] = None
-    output_mode: Optional[str] = None
+    fds: dict[int, Any] = field(default_factory=dict)
+    require_success: bool = True
 
-    @staticmethod
-    def get_fd(value, mode):
-        if value is None:
-            return None
-
-        if isinstance(value, (str, Path)):
-            return open(value, mode)
-    
-        return value
-    
-    def exec(self, input_fd, output_fd):
-        return subprocess.Popen(self.argv, stdin=input_fd, stdout=output_fd)
+    def exec(self, fds):
+        return subprocess.Popen(self.argv, stdin=fds.get(0), stdout=fds.get(1, subprocess.PIPE), stderr=fds.get(2))
 
     def invoke(self):
         if self.result is not None:
             return
 
-        input_fd = ResultAdaptor.get_fd(self.input_file, 'r')
-        output_fd =  ResultAdaptor.get_fd(self.output_file, self.output_mode or 'w') or subprocess.PIPE
-
-        proc = self.exec(input_fd, output_fd)
+        print(self.fds)
+        proc = self.exec(self.fds)
         (stdout, stderr) = proc.communicate()
-        
-        if input_fd:
-            input_fd.close()
+       
+        for fd in self.fds.values():
+            fd.close()
 
-        if output_fd is not subprocess.PIPE:
-            output_fd.flush()
-            output_fd.close()
-
-        if proc.returncode != 0:
+        if self.require_success and proc.returncode != 0:
             raise ValueError('oh man')
 
         if stdout:
-            self.result = stdout.decode()[:-1]
+            self.result = stdout
+        else:
+            self.result = b''
 
     def run(self):
         self.invoke()
@@ -56,33 +66,55 @@ class ResultAdaptor:
 
     def __str__(self):
         self.invoke()
-        return self.result
+        return self.result.decode()[:-1]
 
     def __repr__(self):
         self.invoke()
-        return repr(self.result)
+        return repr(self.result.decode()[:-1])
 
     def __iter__(self):
         self.invoke()
-        return iter(self.result.splitlines())
+        return iter(self.result.decode()[:-1].splitlines())
+
+    def __bytes__(self):
+        self.invoke()
+        return self.result
+
+    def __int__(self):
+        return int(str(self))
+
+    def __bool__(self):
+        return bool(int(self))
+
+    def __float__(self):
+        return float(str(self))
+
+    def __contains__(self, query):
+        return query in str(self)
+
+    def __eq__(self, other):
+        return str(self) == other
 
     def __lt__(self, input_file):
-        return ResultAdaptor(
-            self.argv, input_file=input_file, output_file=self.output_file
-        )
+        return FDSetter(self, None) < input_file
 
     def __gt__(self, output_file):
-        return ResultAdaptor(
-            self.argv, input_file=self.input_file, output_file=output_file
-        )
+        return FDSetter(self, None) > output_file
 
     def __rshift__(self, output_file):
-        return ResultAdaptor(
-            self.argv,
-            input_file=self.input_file,
-            output_file=output_file,
-            output_mode="a",
-        )
+        return FDSetter(self, None) >> output_file
+
+    def output_to(self, output_file):
+        FDSetter(self, 1) > output_file
+        FDSetter(self, 2) > output_file
+        return self
+
+    def fd(self, fileno):
+        return FDSetter(self, fileno)
+
+    def or_true(self):
+        self.require_success = False
+        return self
 
     def __or__(self, next_command):
         return PipelineAdaptor([self, next_command])
@@ -95,9 +127,9 @@ class PipelineAdaptor:
         return PipelineAdaptor([*self.commands, next_command])
 
     def run(self):
+        stdin = None
         for command in self.commands:
-            print(command.argv)
-            proc = command.exec(stdin, subprocess.PIPE)
+            proc = command.exec({0: stdin, 1: subprocess.PIPE})
             stdin = proc.stdout
            
         # We have the last proc, now drain it
