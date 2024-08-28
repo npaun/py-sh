@@ -33,6 +33,6 @@ The output of commands is lazily loaded. Commands are only run once you interact
 | `sh.reboot().run()`                 | Force evaluation                                              |
 | `str(sh.date())`                    | Cast to string                                                |
 | `repr(sh.date())`                   | Repr builtin                                                  |
-| `list(sh.git.diff(name_only=True)`  | Any kind of iteration will split on newlines                  |
+| `list(sh.git.diff(name_only=True))` | Any kind of iteration will split on newlines                  |
 | `print(sh.date())`                  | Note: printing works automatically because of the rules above |
 
